@@ -2873,6 +2873,7 @@ private struct SidebarDebugView: View {
     @AppStorage("sidebarState") private var sidebarState = SidebarStateOption.followWindow.rawValue
     @AppStorage("sidebarCornerRadius") private var sidebarCornerRadius = 0.0
     @AppStorage("sidebarBlurOpacity") private var sidebarBlurOpacity = 1.0
+    @AppStorage("autoHideSplitButtons") private var autoHideSplitButtons = false
     @AppStorage(SidebarBranchLayoutSettings.key) private var sidebarBranchVerticalLayout = SidebarBranchLayoutSettings.defaultVerticalLayout
     @AppStorage(ShortcutHintDebugSettings.sidebarHintXKey) private var sidebarShortcutHintXOffset = ShortcutHintDebugSettings.defaultSidebarHintX
     @AppStorage(ShortcutHintDebugSettings.sidebarHintYKey) private var sidebarShortcutHintYOffset = ShortcutHintDebugSettings.defaultSidebarHintY
@@ -3018,6 +3019,19 @@ private struct SidebarDebugView: View {
                     .padding(.top, 2)
                 }
 
+                GroupBox(String(localized: "settings.panelButtons.title", defaultValue: "Panel Buttons")) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Toggle(
+                            String(localized: "settings.panelButtons.autoHide", defaultValue: "Auto-hide panel buttons"),
+                            isOn: $autoHideSplitButtons
+                        )
+                        Text(String(localized: "settings.panelButtons.autoHide.description", defaultValue: "Hides terminal, browser, and split buttons until you hover over the panel header."))
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.top, 2)
+                }
+
                 HStack(spacing: 12) {
                     Button("Reset Tint") {
                         sidebarTintOpacity = 0.62
@@ -3135,6 +3149,7 @@ private struct SidebarDebugView: View {
         sidebarBlurOpacity = preset.blurOpacity
         sidebarTintHexLight = nil
         sidebarTintHexDark = nil
+        UserDefaults.standard.set(true, forKey: "sidebarPresetSetByUser")
     }
 }
 

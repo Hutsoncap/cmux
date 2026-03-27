@@ -5566,7 +5566,9 @@ final class Workspace: Identifiable, ObservableObject {
     private static func bonsplitAppearance(from config: GhosttyConfig) -> BonsplitConfiguration.Appearance {
         bonsplitAppearance(
             from: config.backgroundColor,
-            backgroundOpacity: config.backgroundOpacity
+            backgroundOpacity: config.backgroundOpacity,
+            splitDividerColorHex: config.resolvedSplitDividerColor.hexString(),
+            accentColorHex: config.palette[12]?.hexString()
         )
     }
 
@@ -5587,16 +5589,23 @@ final class Workspace: Identifiable, ObservableObject {
 
     private static func bonsplitAppearance(
         from backgroundColor: NSColor,
-        backgroundOpacity: Double
+        backgroundOpacity: Double,
+        splitDividerColorHex: String? = nil,
+        accentColorHex: String? = nil
     ) -> BonsplitConfiguration.Appearance {
-        BonsplitConfiguration.Appearance(
+        let autoHide = UserDefaults.standard.bool(forKey: "autoHideSplitButtons")
+        return BonsplitConfiguration.Appearance(
+            showSplitButtons: true,
+            autoHideSplitButtons: autoHide,
             splitButtonTooltips: Self.currentSplitButtonTooltips(),
             enableAnimations: false,
             chromeColors: .init(
                 backgroundHex: Self.bonsplitChromeHex(
                     backgroundColor: backgroundColor,
                     backgroundOpacity: backgroundOpacity
-                )
+                ),
+                borderHex: splitDividerColorHex,
+                accentHex: accentColorHex
             )
         )
     }
@@ -5605,17 +5614,25 @@ final class Workspace: Identifiable, ObservableObject {
         applyGhosttyChrome(
             backgroundColor: config.backgroundColor,
             backgroundOpacity: config.backgroundOpacity,
+            splitDividerColorHex: config.resolvedSplitDividerColor.hexString(),
             reason: reason
         )
     }
 
-    func applyGhosttyChrome(backgroundColor: NSColor, backgroundOpacity: Double, reason: String = "unspecified") {
+    func applyGhosttyChrome(
+        backgroundColor: NSColor,
+        backgroundOpacity: Double,
+        splitDividerColorHex: String? = nil,
+        reason: String = "unspecified"
+    ) {
         let nextHex = Self.bonsplitChromeHex(
             backgroundColor: backgroundColor,
             backgroundOpacity: backgroundOpacity
         )
         let currentChromeColors = bonsplitController.configuration.appearance.chromeColors
-        let isNoOp = currentChromeColors.backgroundHex == nextHex
+        let bgChanged = currentChromeColors.backgroundHex != nextHex
+        let borderChanged = splitDividerColorHex != nil && currentChromeColors.borderHex != splitDividerColorHex
+        let isNoOp = !bgChanged && !borderChanged
 
         if GhosttyApp.shared.backgroundLogEnabled {
             let currentBackgroundHex = currentChromeColors.backgroundHex ?? "nil"
@@ -5628,6 +5645,9 @@ final class Workspace: Identifiable, ObservableObject {
             return
         }
         bonsplitController.configuration.appearance.chromeColors.backgroundHex = nextHex
+        if let splitDividerColorHex {
+            bonsplitController.configuration.appearance.chromeColors.borderHex = splitDividerColorHex
+        }
         if GhosttyApp.shared.backgroundLogEnabled {
             GhosttyApp.shared.logBackground(
                 "theme applied workspace=\(id.uuidString) reason=\(reason) resultingBg=\(bonsplitController.configuration.appearance.chromeColors.backgroundHex ?? "nil")"
@@ -5661,7 +5681,9 @@ final class Workspace: Identifiable, ObservableObject {
         // runs for socket/CLI workspace creation and can cause visible typing lag.
         let appearance = Self.bonsplitAppearance(
             from: GhosttyApp.shared.defaultBackgroundColor,
-            backgroundOpacity: GhosttyApp.shared.defaultBackgroundOpacity
+            backgroundOpacity: GhosttyApp.shared.defaultBackgroundOpacity,
+            splitDividerColorHex: GhosttyApp.shared.defaultSplitDividerColorHex,
+            accentColorHex: GhosttyApp.shared.defaultAccentColorHex
         )
         let config = BonsplitConfiguration(
             allowSplits: true,
@@ -5751,9 +5773,13 @@ final class Workspace: Identifiable, ObservableObject {
 
     func refreshSplitButtonTooltips() {
         let tooltips = Self.currentSplitButtonTooltips()
+        let autoHide = UserDefaults.standard.bool(forKey: "autoHideSplitButtons")
         var configuration = bonsplitController.configuration
-        guard configuration.appearance.splitButtonTooltips != tooltips else { return }
+        let tooltipsChanged = configuration.appearance.splitButtonTooltips != tooltips
+        let autoHideChanged = configuration.appearance.autoHideSplitButtons != autoHide
+        guard tooltipsChanged || autoHideChanged else { return }
         configuration.appearance.splitButtonTooltips = tooltips
+        configuration.appearance.autoHideSplitButtons = autoHide
         bonsplitController.configuration = configuration
     }
 

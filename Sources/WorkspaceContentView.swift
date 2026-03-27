@@ -618,6 +618,9 @@ struct WorkspaceContentView: View {
         // Use the runtime opacity from the Ghostty engine, which may differ from the
         // file-level value parsed by GhosttyConfig.load().
         next.backgroundOpacity = defaultBackgroundOpacity()
+        // Cache theme-derived colors so Workspace.init() can use them without re-parsing config.
+        GhosttyApp.shared.defaultSplitDividerColorHex = next.resolvedSplitDividerColor.hexString()
+        GhosttyApp.shared.defaultAccentColorHex = next.palette[12]?.hexString()
         if GhosttyApp.shared.backgroundLogEnabled {
             GhosttyApp.shared.logBackground(
                 "theme resolve reason=\(reason) loadedBg=\(loadedBackgroundHex) overrideBg=\(backgroundOverride?.hexString() ?? "nil") defaultBg=\(defaultBackgroundHex) finalBg=\(next.backgroundColor.hexString()) opacity=\(String(format: "%.3f", next.backgroundOpacity)) theme=\(next.theme ?? "nil")"

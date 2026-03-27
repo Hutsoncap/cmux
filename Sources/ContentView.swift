@@ -41,6 +41,13 @@ func sidebarActiveForegroundNSColor(
 }
 
 func cmuxAccentNSColor(for colorScheme: ColorScheme) -> NSColor {
+    // When a Ghostty theme is set, use palette color 12 (bright blue/aqua) as the
+    // accent instead of the hardcoded cmux blue. This integrates the UI accent with
+    // the user's terminal theme (e.g., Gruvbox #83a598 instead of system blue).
+    let config = GhosttyConfig.load()
+    if config.theme != nil, let themeAccent = config.palette[12] {
+        return themeAccent
+    }
     switch colorScheme {
     case .dark:
         return NSColor(
@@ -113,7 +120,13 @@ enum SidebarRemoteErrorCopySupport {
 }
 
 func sidebarSelectedWorkspaceBackgroundNSColor(for colorScheme: ColorScheme) -> NSColor {
-    cmuxAccentNSColor(for: colorScheme)
+    // Use the Ghostty theme's selection-background when available for a more
+    // unified appearance; fall back to the cmux accent blue otherwise.
+    let config = GhosttyConfig.load()
+    if config.theme != nil {
+        return config.selectionBackground
+    }
+    return cmuxAccentNSColor(for: colorScheme)
 }
 
 func sidebarSelectedWorkspaceForegroundNSColor(opacity: CGFloat) -> NSColor {
@@ -2597,6 +2610,13 @@ struct ContentView: View {
                         .padding(.leading, sidebarState.isVisible ? sidebarWidth : 0)
                     if sidebarState.isVisible {
                         sidebarView
+                        // Vertical divider line between sidebar and content
+                        Rectangle()
+                            .fill(Color(nsColor: GhosttyConfig.load().resolvedSplitDividerColor))
+                            .frame(width: 1)
+                            .frame(maxHeight: .infinity)
+                            .offset(x: sidebarWidth - 0.5)
+                            .allowsHitTesting(false)
                     }
                 }
             )
@@ -3143,7 +3163,18 @@ struct ContentView: View {
             // Background glass: skip on macOS 26+ where NSGlassEffectView can cause blank
             // or incorrectly tinted SwiftUI content. Keep native window rendering there so
             // Ghostty theme colors remain authoritative.
-            let currentThemeBackground = GhosttyBackgroundTheme.currentColor()
+            // Use the config-parsed background for the window color. The runtime
+            // GhosttyApp.shared.defaultBackgroundColor starts as .windowBackgroundColor
+            // (system dark gray) before the engine initializes with the actual theme
+            // color. The mismatch causes the macOS 26 titlebar glass to render a visible
+            // light gradient in the window corner.
+            let config = GhosttyConfig.load()
+            let configBg = config.backgroundColor.withAlphaComponent(CGFloat(config.backgroundOpacity))
+            let runtimeBg = GhosttyBackgroundTheme.currentColor()
+            // Prefer config-parsed color (available immediately) for opaque themes;
+            // fall back to runtime for transparent/semi-transparent backgrounds where
+            // the engine's dynamic opacity matters.
+            let currentThemeBackground = configBg.alphaComponent >= 0.999 ? configBg : runtimeBg
             let shouldApplyWindowGlassFallback =
                 sidebarBlendMode == SidebarBlendModeOption.behindWindow.rawValue
                 && bgGlassEnabled
@@ -13660,6 +13691,7 @@ private struct SidebarVisualEffectBackground: NSViewRepresentable {
             visualEffect.alphaValue = max(0.0, min(1.0, opacity))
             visualEffect.layer?.cornerRadius = cornerRadius
             visualEffect.layer?.masksToBounds = cornerRadius > 0
+
             visualEffect.needsDisplay = true
         }
     }
@@ -13738,7 +13770,7 @@ private struct SidebarBackdrop: View {
                         blendingMode: blendingMode,
                         state: state,
                         opacity: sidebarBlurOpacity,
-                        tintColor: tintColor,
+                        tintColor: nil,
                         cornerRadius: cornerRadius,
                         preferLiquidGlass: useLiquidGlass
                     )
@@ -13747,8 +13779,10 @@ private struct SidebarBackdrop: View {
                         Color(nsColor: tintColor)
                     }
                 }
+            } else if materialOption == .none, tintColor.alphaComponent > 0.001 {
+                // No material/blur — render a solid tint color (e.g., theme background).
+                Color(nsColor: tintColor)
             }
-            // When material is none or useWindowLevelGlass, render nothing
         }
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
     }

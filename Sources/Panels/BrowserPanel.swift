@@ -2479,6 +2479,23 @@ final class BrowserPanel: Panel, ObservableObject {
 
         // Enable developer extras (DevTools)
         configuration.preferences.setValue(true, forKey: "developerExtrasEnabled")
+
+        // Ensure WebKit's inspector opens attached (docked) by default.
+        // WebKit's platformCanAttach() also requires the webview to have a valid frame
+        // (height >= 334, width >= 500), but this preference must be set first.
+        let defaults = UserDefaults.standard
+        let startsAttachedKey = "__WebInspectorPageGroupLevel1__.WebKit2InspectorStartsAttached"
+        if defaults.object(forKey: startsAttachedKey) == nil {
+            defaults.set(true, forKey: startsAttachedKey)
+        }
+        let attachmentSideKey = "__WebInspectorPageGroupLevel1__.WebKit2InspectorAttachmentSide"
+        if defaults.object(forKey: attachmentSideKey) == nil {
+            defaults.set(0, forKey: attachmentSideKey)  // 0 = Bottom
+        }
+        let attachedHeightKey = "__WebInspectorPageGroupLevel1__.WebKit2InspectorAttachedHeight"
+        if defaults.object(forKey: attachedHeightKey) == nil {
+            defaults.set(300, forKey: attachedHeightKey)
+        }
         configuration.preferences.isElementFullscreenEnabled = true
 
         // Enable JavaScript
@@ -4306,6 +4323,15 @@ extension BrowserPanel {
             developerToolsDetachedOpenGraceDeadline = nil
             developerToolsLastKnownVisibleAt = Date()
             return true
+        }
+
+        // WebKit's platformCanAttach() requires the webview to be in a window,
+        // not hidden, and have a frame with height >= 334 and width >= 500.
+        // Force layout if the webview doesn't meet these requirements yet.
+        if let superview = webView.superview {
+            if webView.frame.height < 334 || webView.frame.width < 500 {
+                superview.layoutSubtreeIfNeeded()
+            }
         }
 
         prepareDeveloperToolsForRevealIfNeeded(inspector)

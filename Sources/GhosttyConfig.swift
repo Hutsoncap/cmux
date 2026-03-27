@@ -164,6 +164,20 @@ struct GhosttyConfig {
             if let opacity = sidebarTintOpacity {
                 UserDefaults.standard.set(opacity, forKey: "sidebarTintOpacity")
             }
+            // When a theme is set and the user hasn't manually configured a sidebar preset,
+            // use a solid opaque fill with the theme background color (no material/blur).
+            // This matches how the production build renders the sidebar — material=none with
+            // the theme color as a fully opaque tint, which avoids titlebar glass artifacts.
+            if theme != nil {
+                let defaults = UserDefaults.standard
+                let hasUserPreset = defaults.object(forKey: "sidebarPresetSetByUser") as? Bool ?? false
+                if !hasUserPreset {
+                    defaults.set("none", forKey: "sidebarMaterial")
+                    defaults.set(backgroundColor.hexString(), forKey: "sidebarTintHex")
+                    defaults.set(1.0, forKey: "sidebarTintOpacity")
+                    defaults.set(0.0, forKey: "sidebarBlurOpacity")
+                }
+            }
             return
         }
 

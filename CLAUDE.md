@@ -1,4 +1,63 @@
-# cmux agent notes
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## What is cmux
+
+cmux is a Ghostty-based macOS terminal multiplexer with vertical tabs, split panes, notification rings, an in-app browser, and a scriptable socket/CLI API for AI coding agents. It embeds the Ghostty terminal engine (C library via Zig) in a SwiftUI + AppKit shell.
+
+## Architecture overview
+
+### Core model: Workspace → Panel → Surface
+
+- **TabManager** (`Sources/TabManager.swift`) — owns an ordered array of Workspaces, tracks selection/focus, handles creation/deletion/reordering.
+- **Workspace** (`Sources/Workspace.swift`) — identified by UUID. Contains a `BonsplitController` (split tree), a `panels: [UUID: any Panel]` map, sidebar metadata (git branch, PR state, ports, logs, progress), and optional remote SSH session state.
+- **Panel** (`Sources/Panels/Panel.swift`) — protocol with subtypes: `TerminalPanel` (Ghostty surface), `BrowserPanel` (WKWebView), `MarkdownPanel`.
+- **Bonsplit** (`vendor/bonsplit/`) — submodule providing the split-pane tree and tab bar. Tree nodes are `.pane(id)` or `.split(first, second, direction)`.
+
+### Terminal integration
+
+- **GhosttyTerminalView** (`Sources/GhosttyTerminalView.swift`) — bridges SwiftUI to the Ghostty C API (`ghostty.h`), manages `ghostty_surface_t` instances, clipboard, zoom/font, and terminal find overlay.
+- **TerminalWindowPortal** (`Sources/TerminalWindowPortal.swift`) — AppKit NSView portal hosting Ghostty rendering. Contains the typing-latency-sensitive `hitTest()`.
+- **GhosttyKit** — the Ghostty terminal engine compiled as an xcframework via Zig (`ghostty/` submodule). Built/cached by `scripts/setup.sh`.
+
+### Socket/CLI control plane
+
+- **TerminalController** (`Sources/TerminalController.swift`) — Unix socket server accepting connections, dispatching v1 (text) and v2 (JSON-RPC) commands. Handles workspace/pane/surface/browser operations.
+- **CLI** (`CLI/cmux.swift`) — single-file CLI binary. Connects to the socket for command dispatch. Socket autodiscovery: flag → `CMUX_SOCKET` env → `~/.cmux/socket_addr`.
+- **SocketControlSettings** (`Sources/SocketControlSettings.swift`) — socket path, access mode (`cmuxOnly` vs `externalTools`), focus allow/deny stack.
+
+### Remote SSH
+
+- **Remote daemon** (`daemon/remote/`) — Go binary (`cmuxd-remote`) uploaded to remote hosts over SSH. Communicates via newline-delimited JSON RPC over stdio.
+- **Proxy architecture** — local loopback relay → SSH reverse-forward → remote daemon. HMAC token auth, SOCKS5/HTTP CONNECT tunneling.
+- Remote session management classes are nested in `Workspace.swift`: `WorkspaceRemoteSessionController`, `WorkspaceRemoteDaemonRPCClient`, `WorkspaceRemoteProxyBroker`.
+
+### Application entry points
+
+- **cmuxApp** (`Sources/cmuxApp.swift`) — SwiftUI `@main` App. Initializes workspace/tab manager, window hosting, launch arguments.
+- **AppDelegate** (`Sources/AppDelegate.swift`) — `NSApplicationDelegate`. Global keyboard event interception (`performKeyEquivalent`), hotkey coordination, command palette focus steering.
+
+### Submodules
+
+| Submodule | Path | Purpose |
+|-----------|------|---------|
+| ghostty | `ghostty/` | Ghostty terminal engine (manaflow-ai fork) |
+| bonsplit | `vendor/bonsplit/` | Split-pane tree + tab bar framework |
+| homebrew-cmux | `homebrew-cmux/` | Homebrew tap |
+
+### Web/docs
+
+`web/` — Next.js app (marketing site + docs). Changelog page reads from `CHANGELOG.md`. Deployed to Vercel.
+
+### CI/CD (`.github/workflows/`)
+
+| Workflow | Purpose |
+|----------|---------|
+| `ci.yml` | Build, unit tests, remote daemon tests |
+| `test-e2e.yml` | Python E2E tests (manual trigger) |
+| `release.yml` | Sign, notarize, upload DMG to GitHub Releases |
+| `nightly.yml` | Nightly builds with staging config |
 
 ## Initial setup
 
